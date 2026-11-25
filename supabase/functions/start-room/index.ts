@@ -3,6 +3,7 @@
 // hämtar filmer från TMDB som finns på minst en av dem och sparar N filmer.
 import { createClient } from 'npm:@supabase/supabase-js@2'
 import { corsHeaders, json } from '../_shared/cors.ts'
+import { movieWeight, readableTitle, shuffle, weightedSample } from '../_shared/selection.ts'
 import { swedishProviders, tmdb } from '../_shared/tmdb.ts'
 
 type DiscoverMovie = {
@@ -15,20 +16,22 @@ type DiscoverMovie = {
 }
 
 type ProviderEntry = { provider_id: number }
-type WatchProviders = {
-  results: Record<string, { flatrate?: ProviderEntry[]; free?: ProviderEntry[]; ads?: ProviderEntry[] }>
-}
 
-const PAGES = 5
-
-function shuffle<T>(items: T[]): T[] {
-  const a = [...items]
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1))
-    ;[a[i], a[j]] = [a[j], a[i]]
+/** /movie/{id} med append_to_response=watch/providers,translations,images */
+type MovieDetails = {
+  id: number
+  title: string
+  original_title: string
+  poster_path: string | null
+  belongs_to_collection: { id: number } | null
+  'watch/providers'?: {
+    results: Record<string, { flatrate?: ProviderEntry[]; free?: ProviderEntry[]; ads?: ProviderEntry[] }>
   }
-  return a
+  translations?: { translations: { iso_639_1: string; data: { title?: string } }[] }
+  images?: { posters: { file_path: string }[] }
 }
+
+const PAGES = 6
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
@@ -78,6 +81,8 @@ Deno.serve(async (req) => {
           with_watch_monetization_types: 'flatrate|free|ads',
           sort_by: 'popularity.desc',
           'vote_count.gte': 100,
+          // Rumsledarens genrefilter. | betyder ELLER: filmen ska ha minst en av genrerna.
+          ...(room.genre_ids?.length ? { with_genres: room.genre_ids.join('|') } : {}),
           language: 'sv-SE',
           include_adult: 'false',
           page: i + 1,
@@ -86,7 +91,7 @@ Deno.serve(async (req) => {
     )
     const seen = new Set<number>()
     const candidates = pages.flatMap((p) => p.results).filter((m) => !seen.has(m.id) && seen.add(m.id))
-    if (candidates.length === 0) return json({ error: 'Hittade inga filmer på gruppens tjänster' }, 404)
+    if (candidates.length === 0) return json({ error: 'Hittade inga filmer på gruppens tjänster och valda genrer' }, 404)
 
     const [genreData, allProviders] = await Promise.all([
       tmdb<{ genres: { id: number; name: string }[] }>('/genre/movie/list', { language: 'sv-SE' }),
@@ -95,35 +100,62 @@ Deno.serve(async (req) => {
     const genreName = new Map(genreData.genres.map((g) => [g.id, g.name]))
     const providerInfo = new Map(allProviders.map((p) => [p.provider_id, p]))
 
-    // Gruppens tjänster som en film finns på (abonnemang eller gratis).
-    async function groupProvidersFor(movieId: number) {
-      const wp = await tmdb<WatchProviders>(`/movie/${movieId}/watch/providers`)
-      const offers = wp.results?.[region] ?? {}
+    type Checked = {
+      movie: DiscoverMovie
+      title: string
+      poster: string
+      inCollection: boolean
+      providers: { id: number; name: string; logo_path: string | null }[]
+    }
+
+    // Hämtar detaljer för en film: läsbar titel, omslag, filmserie och gruppens tjänster.
+    // Returnerar null om filmen saknar omslag eller inte finns på någon av gruppens tjänster.
+    async function check(movie: DiscoverMovie): Promise<Checked | null> {
+      const d = await tmdb<MovieDetails>(`/movie/${movie.id}`, {
+        language: 'sv-SE',
+        append_to_response: 'watch/providers,translations,images',
+        include_image_language: 'sv,en,null',
+      })
+      const poster = d.poster_path ?? d.images?.posters?.[0]?.file_path ?? null
+      if (!poster) return null
+
+      const offers = d['watch/providers']?.results?.[region] ?? {}
       const available = [...(offers.flatrate ?? []), ...(offers.free ?? []), ...(offers.ads ?? [])]
       const ids = [...new Set(available.map((f) => f.provider_id))].filter((id) => groupProviders.has(id))
-      return ids.map((id) => {
-        const info = providerInfo.get(id)
-        return { id, name: info?.provider_name ?? 'Okänd tjänst', logo_path: info?.logo_path ?? null }
-      })
+      if (ids.length === 0) return null
+
+      return {
+        movie,
+        title: readableTitle({ ...d, translations: d.translations?.translations }),
+        poster,
+        inCollection: d.belongs_to_collection !== null,
+        providers: ids.map((id) => {
+          const info = providerInfo.get(id)
+          return { id, name: info?.provider_name ?? 'Okänd tjänst', logo_path: info?.logo_path ?? null }
+        }),
+      }
     }
 
-    // Discover-filtret är inte helt exakt, så kontrollera varje film och hoppa över
-    // de som inte finns på någon av gruppens tjänster. Kontrollera i omgångar tills vi har N.
+    // Discover-filtret är inte helt exakt, så varje film kontrolleras. Vi samlar ungefär dubbelt
+    // så många godkända filmer som behövs och gör sedan ett viktat urval, där filmer i en
+    // filmserie (t.ex. Harry Potter) har lägre chans att komma med.
+    const wanted = room.movie_count
     const shuffled = shuffle(candidates)
-    const picked: { movie: DiscoverMovie; providers: Awaited<ReturnType<typeof groupProvidersFor>> }[] = []
-    for (let i = 0; i < shuffled.length && picked.length < room.movie_count; i += room.movie_count) {
-      const batch = shuffled.slice(i, i + room.movie_count)
-      const checked = await Promise.all(batch.map(async (movie) => ({ movie, providers: await groupProvidersFor(movie.id) })))
-      for (const c of checked) if (c.providers.length > 0 && picked.length < room.movie_count) picked.push(c)
+    const pool: Checked[] = []
+    for (let i = 0; i < shuffled.length && pool.length < wanted * 2; i += wanted) {
+      const batch = await Promise.all(shuffled.slice(i, i + wanted).map(check))
+      for (const c of batch) if (c) pool.push(c)
     }
-    if (picked.length === 0) return json({ error: 'Hittade inga filmer på gruppens tjänster' }, 404)
+    if (pool.length === 0) return json({ error: 'Hittade inga filmer på gruppens tjänster' }, 404)
 
-    const rows = picked.map(({ movie: m, providers }, position) => ({
+    const picked = weightedSample(pool, wanted, movieWeight)
+
+    const rows = picked.map(({ movie: m, title, poster, providers }, position) => ({
       room_id: roomId,
       position,
       tmdb_id: m.id,
-      title: m.title,
-      poster_path: m.poster_path,
+      title,
+      poster_path: poster,
       genres: m.genre_ids.map((id) => genreName.get(id)).filter(Boolean),
       providers,
       popularity: m.popularity,

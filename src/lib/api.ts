@@ -1,5 +1,5 @@
 import { ensureSession, supabase } from './supabase'
-import type { Participant, Provider, Room, RoomMovie, Vote } from './types'
+import type { Genre, Participant, Provider, Room, RoomMovie, Vote } from './types'
 
 async function rpc<T>(fn: string, args?: Record<string, unknown>): Promise<T> {
   await ensureSession()
@@ -28,15 +28,22 @@ export const setMovieCount = (roomId: string, count: number) =>
   rpc<void>('set_movie_count', { p_room: roomId, p_count: count })
 export const castVote = (roomId: string, tmdbId: number, liked: boolean) =>
   rpc<void>('cast_vote', { p_room: roomId, p_tmdb_id: tmdbId, p_liked: liked })
+export const setGenres = (roomId: string, genreIds: number[]) =>
+  rpc<void>('set_genres', { p_room: roomId, p_genre_ids: genreIds })
+export const pickMovie = (roomId: string, tmdbId: number) => rpc<void>('pick_movie', { p_room: roomId, p_tmdb_id: tmdbId })
 export const finishRoom = (roomId: string) => rpc<void>('finish_room', { p_room: roomId })
 export const startRoom = (roomId: string) => invoke<{ ok: true; count: number }>('start-room', { roomId })
 
-let providerCache: Provider[] | null = null
-export async function fetchProviders(): Promise<Provider[]> {
-  if (providerCache) return providerCache
-  const { providers } = await invoke<{ providers: Provider[] }>('providers')
-  providerCache = providers
-  return providers
+type Lists = { providers: Provider[]; genres: Genre[] }
+let listCache: Promise<Lists> | null = null
+
+/** Streamingtjänster och genrer för lobbyn. Hämtas en gång per sidladdning. */
+export function fetchLists(): Promise<Lists> {
+  listCache ??= invoke<Lists>('providers').catch((e) => {
+    listCache = null
+    throw e
+  })
+  return listCache
 }
 
 export async function fetchRoom(roomId: string): Promise<Room> {
