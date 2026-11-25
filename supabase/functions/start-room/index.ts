@@ -19,7 +19,7 @@ type WatchProviders = {
   results: Record<string, { flatrate?: ProviderEntry[]; free?: ProviderEntry[]; ads?: ProviderEntry[] }>
 }
 
-const PAGES = 3
+const PAGES = 5
 
 function shuffle<T>(items: T[]): T[] {
   const a = [...items]
@@ -95,32 +95,40 @@ Deno.serve(async (req) => {
     const genreName = new Map(genreData.genres.map((g) => [g.id, g.name]))
     const providerInfo = new Map(allProviders.map((p) => [p.provider_id, p]))
 
-    // Välj N slumpvis bland kandidaterna och kolla exakt vilka av gruppens tjänster de finns på.
-    const chosen = shuffle(candidates).slice(0, room.movie_count)
-    const rows = await Promise.all(
-      chosen.map(async (m, position) => {
-        const wp = await tmdb<WatchProviders>(`/movie/${m.id}/watch/providers`)
-        const offers = wp.results?.[region] ?? {}
-        const available = [...(offers.flatrate ?? []), ...(offers.free ?? []), ...(offers.ads ?? [])]
-        const providers = available
-          .filter((f, i) => groupProviders.has(f.provider_id) && available.findIndex((x) => x.provider_id === f.provider_id) === i)
-          .map((f) => {
-            const info = providerInfo.get(f.provider_id)
-            return { id: f.provider_id, name: info?.provider_name ?? 'Okänd tjänst', logo_path: info?.logo_path ?? null }
-          })
-        return {
-          room_id: roomId,
-          position,
-          tmdb_id: m.id,
-          title: m.title,
-          poster_path: m.poster_path,
-          genres: m.genre_ids.map((id) => genreName.get(id)).filter(Boolean),
-          providers,
-          popularity: m.popularity,
-          release_year: m.release_date ? Number(m.release_date.slice(0, 4)) : null,
-        }
-      }),
-    )
+    // Gruppens tjänster som en film finns på (abonnemang eller gratis).
+    async function groupProvidersFor(movieId: number) {
+      const wp = await tmdb<WatchProviders>(`/movie/${movieId}/watch/providers`)
+      const offers = wp.results?.[region] ?? {}
+      const available = [...(offers.flatrate ?? []), ...(offers.free ?? []), ...(offers.ads ?? [])]
+      const ids = [...new Set(available.map((f) => f.provider_id))].filter((id) => groupProviders.has(id))
+      return ids.map((id) => {
+        const info = providerInfo.get(id)
+        return { id, name: info?.provider_name ?? 'Okänd tjänst', logo_path: info?.logo_path ?? null }
+      })
+    }
+
+    // Discover-filtret är inte helt exakt, så kontrollera varje film och hoppa över
+    // de som inte finns på någon av gruppens tjänster. Kontrollera i omgångar tills vi har N.
+    const shuffled = shuffle(candidates)
+    const picked: { movie: DiscoverMovie; providers: Awaited<ReturnType<typeof groupProvidersFor>> }[] = []
+    for (let i = 0; i < shuffled.length && picked.length < room.movie_count; i += room.movie_count) {
+      const batch = shuffled.slice(i, i + room.movie_count)
+      const checked = await Promise.all(batch.map(async (movie) => ({ movie, providers: await groupProvidersFor(movie.id) })))
+      for (const c of checked) if (c.providers.length > 0 && picked.length < room.movie_count) picked.push(c)
+    }
+    if (picked.length === 0) return json({ error: 'Hittade inga filmer på gruppens tjänster' }, 404)
+
+    const rows = picked.map(({ movie: m, providers }, position) => ({
+      room_id: roomId,
+      position,
+      tmdb_id: m.id,
+      title: m.title,
+      poster_path: m.poster_path,
+      genres: m.genre_ids.map((id) => genreName.get(id)).filter(Boolean),
+      providers,
+      popularity: m.popularity,
+      release_year: m.release_date ? Number(m.release_date.slice(0, 4)) : null,
+    }))
 
     const { error: insertError } = await admin.from('room_movies').insert(rows)
     if (insertError) throw insertError
