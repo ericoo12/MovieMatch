@@ -14,8 +14,9 @@ type DiscoverMovie = {
   release_date?: string
 }
 
+type ProviderEntry = { provider_id: number }
 type WatchProviders = {
-  results: Record<string, { flatrate?: { provider_id: number }[] }>
+  results: Record<string, { flatrate?: ProviderEntry[]; free?: ProviderEntry[]; ads?: ProviderEntry[] }>
 }
 
 const PAGES = 3
@@ -73,7 +74,8 @@ Deno.serve(async (req) => {
         tmdb<{ results: DiscoverMovie[] }>('/discover/movie', {
           watch_region: region,
           with_watch_providers: [...groupProviders].join('|'),
-          with_watch_monetization_types: 'flatrate',
+          // flatrate = ingår i abonnemang, free/ads = gratistjänster som SVT Play
+          with_watch_monetization_types: 'flatrate|free|ads',
           sort_by: 'popularity.desc',
           'vote_count.gte': 100,
           language: 'sv-SE',
@@ -98,9 +100,10 @@ Deno.serve(async (req) => {
     const rows = await Promise.all(
       chosen.map(async (m, position) => {
         const wp = await tmdb<WatchProviders>(`/movie/${m.id}/watch/providers`)
-        const flatrate = wp.results?.[region]?.flatrate ?? []
-        const providers = flatrate
-          .filter((f) => groupProviders.has(f.provider_id))
+        const offers = wp.results?.[region] ?? {}
+        const available = [...(offers.flatrate ?? []), ...(offers.free ?? []), ...(offers.ads ?? [])]
+        const providers = available
+          .filter((f, i) => groupProviders.has(f.provider_id) && available.findIndex((x) => x.provider_id === f.provider_id) === i)
           .map((f) => {
             const info = providerInfo.get(f.provider_id)
             return { id: f.provider_id, name: info?.provider_name ?? 'Okänd tjänst', logo_path: info?.logo_path ?? null }
