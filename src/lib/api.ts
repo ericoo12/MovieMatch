@@ -24,6 +24,7 @@ export const createRoom = () => rpc<string>('create_room')
 export const joinRoom = (code: string) => rpc<string>('join_room', { p_code: code })
 export const setServices = (roomId: string, providers: number[]) =>
   rpc<void>('set_services', { p_room: roomId, p_providers: providers })
+export const reopenServices = (roomId: string) => rpc<void>('reopen_services', { p_room: roomId })
 export const setMovieCount = (roomId: string, count: number) =>
   rpc<void>('set_movie_count', { p_room: roomId, p_count: count })
 export const castVote = (roomId: string, tmdbId: number, liked: boolean) =>
@@ -32,6 +33,7 @@ export const setGenres = (roomId: string, genreIds: number[]) =>
   rpc<void>('set_genres', { p_room: roomId, p_genre_ids: genreIds })
 export const pickMovie = (roomId: string, tmdbId: number) => rpc<void>('pick_movie', { p_room: roomId, p_tmdb_id: tmdbId })
 export const finishRoom = (roomId: string) => rpc<void>('finish_room', { p_room: roomId })
+/** Startar röstningen, eller en ny omgång med nya filmer om rummet redan är klart. */
 export const startRoom = (roomId: string) => invoke<{ ok: true; count: number }>('start-room', { roomId })
 
 type Lists = { providers: Provider[]; genres: Genre[] }
@@ -71,8 +73,14 @@ export async function fetchMyServices(participantId: string): Promise<number[]> 
   return (data ?? []).map((r) => r.provider_id as number)
 }
 
-export async function fetchMovies(roomId: string): Promise<RoomMovie[]> {
-  const { data, error } = await supabase.from('room_movies').select('*').eq('room_id', roomId).order('position')
+/** Filmerna i en viss omgång av rummet. */
+export async function fetchMovies(roomId: string, round: number): Promise<RoomMovie[]> {
+  const { data, error } = await supabase
+    .from('room_movies')
+    .select('*')
+    .eq('room_id', roomId)
+    .eq('round', round)
+    .order('position')
   if (error) throw new Error(error.message)
   return data as RoomMovie[]
 }

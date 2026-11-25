@@ -18,6 +18,6 @@ export default function RoomPage() {
     case 'voting':
       return <Voting room={room} participants={participants} me={me} />
     case 'finished':
-      return <Results room={room} participants={participants} />
+      return <Results room={room} participants={participants} me={me} />
   }
 }

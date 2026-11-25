@@ -1,14 +1,14 @@
 import { motion } from 'motion/react'
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { fetchMovies, fetchVotes, pickMovie } from '../lib/api'
+import { fetchMovies, fetchVotes, pickMovie, startRoom } from '../lib/api'
 import { computeResults, type RankedMovie, type Results as ResultData } from '../lib/results'
 import { posterUrl } from '../lib/tmdb'
 import type { Participant, Room } from '../lib/types'
 import ProviderBadges from './ProviderBadges'
 import { Button, ErrorText, Spinner } from './ui'
 
-type Props = { room: Room; participants: Participant[] }
+type Props = { room: Room; participants: Participant[]; me: Participant }
 
 function MovieRow({ item, voterCount, highlight }: { item: RankedMovie; voterCount: number; highlight?: boolean }) {
   const poster = posterUrl(item.movie.poster_path, 'w342')
@@ -29,17 +29,18 @@ function MovieRow({ item, voterCount, highlight }: { item: RankedMovie; voterCou
   )
 }
 
-export default function Results({ room, participants }: Props) {
+export default function Results({ room, participants, me }: Props) {
   const navigate = useNavigate()
   const [result, setResult] = useState<ResultData | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [picking, setPicking] = useState(false)
+  const [starting, setStarting] = useState(false)
 
   useEffect(() => {
-    Promise.all([fetchMovies(room.id), fetchVotes(room.id)])
+    Promise.all([fetchMovies(room.id, room.round), fetchVotes(room.id)])
       .then(([movies, votes]) => setResult(computeResults(movies, participants, votes)))
       .catch((e: Error) => setError(e.message))
-  }, [room.id, participants])
+  }, [room.id, room.round, participants])
 
   if (error && !result) return <ErrorText>{error}</ErrorText>
   if (!result) return <Spinner label="Räknar röster…" />
@@ -47,6 +48,18 @@ export default function Results({ room, participants }: Props) {
   const { matches, top, voterCount } = result
   // Den slumpade filmen sparas i rummet, så alla i gruppen ser samma val.
   const picked = matches.find((m) => m.movie.tmdb_id === room.picked_tmdb_id) ?? null
+
+  // Rumsledaren startar en ny omgång i samma rum, med filmer som inte visats förut.
+  async function newRound() {
+    setStarting(true)
+    setError(null)
+    try {
+      await startRoom(room.id)
+    } catch (e) {
+      setError((e as Error).message)
+      setStarting(false)
+    }
+  }
 
   async function pickRandom() {
     const options = matches.filter((m) => m.movie.tmdb_id !== room.picked_tmdb_id)
@@ -107,7 +120,7 @@ export default function Results({ room, participants }: Props) {
       ) : top.length > 0 ? (
         <>
           <div className="text-center">
-            <h1 className="text-2xl font-bold">Ingen enhällig match</h1>
+            <h1 className="text-2xl font-bold">Ingen matchning</h1>
             <p className="text-slate-400">Här är gruppens mest gillade filmer.</p>
           </div>
           <ol className="flex flex-col gap-3">
@@ -123,8 +136,16 @@ export default function Results({ room, participants }: Props) {
         </div>
       )}
 
+      {me.is_host ? (
+        <Button variant={matches.length > 0 ? 'secondary' : 'primary'} onClick={newRound} disabled={starting}>
+          {starting ? 'Hämtar nya filmer…' : 'Ny omgång med nya filmer'}
+        </Button>
+      ) : (
+        <p className="text-center text-sm text-slate-400">Rumsledaren kan starta en ny omgång med nya filmer.</p>
+      )}
+      {matches.length <= 1 && <ErrorText>{error}</ErrorText>}
       <Button variant="secondary" onClick={() => navigate('/')}>
-        Ny omgång
+        Till startsidan
       </Button>
       <p className="text-center text-xs text-slate-500">Streamingdata från JustWatch</p>
     </div>
