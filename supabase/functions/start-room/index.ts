@@ -1,6 +1,7 @@
 // POST /functions/v1/start-room { roomId }
 // Rumsledaren startar röstningen. Funktionen slår ihop gruppens tjänster,
 // hämtar filmer från TMDB som finns på minst en av dem och sparar N filmer.
+// När ett rum är klart startar samma anrop en ny omgång med filmer som inte visats förut.
 import { createClient } from 'npm:@supabase/supabase-js@2'
 import { corsHeaders, json } from '../_shared/cors.ts'
 import { movieWeight, readableTitle, shuffle, weightedSample } from '../_shared/selection.ts'
@@ -32,6 +33,7 @@ type MovieDetails = {
 }
 
 const PAGES = 6
+const MAX_PAGES = 15
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
@@ -52,28 +54,34 @@ Deno.serve(async (req) => {
     const { data: room, error: roomError } = await admin.from('rooms').select('*').eq('id', roomId).single()
     if (roomError || !room) return json({ error: 'Rummet finns inte' }, 404)
     if (room.host_id !== userData.user.id) return json({ error: 'Bara rumsledaren kan starta' }, 403)
-    if (room.status !== 'lobby') return json({ error: 'Röstningen har redan startat' }, 409)
+    if (room.status === 'voting') return json({ error: 'Röstningen har redan startat' }, 409)
+    const newRound = room.status === 'finished'
 
     // Gruppens samlade tjänster (unionen).
     const { data: participants } = await admin
       .from('participants')
       .select('id, services_done, participant_services(provider_id)')
       .eq('room_id', roomId)
-    const ready = (participants ?? []).filter((p) => p.services_done)
-    if (ready.length === 0) return json({ error: 'Ingen har valt tjänster än' }, 400)
+    const all = participants ?? []
+    const notReady = all.filter((p) => !p.services_done).length
+    if (all.length === 0 || notReady > 0) {
+      return json({ error: `Väntar på att ${notReady} deltagare ska bli klara` }, 400)
+    }
 
     const groupProviders = new Set<number>()
-    for (const p of ready) for (const s of p.participant_services ?? []) groupProviders.add(s.provider_id)
+    for (const p of all) for (const s of p.participant_services ?? []) groupProviders.add(s.provider_id)
 
-    // Deltagare som inte valt tjänster än tas bort så att röstningen inte fastnar på dem.
-    const notReady = (participants ?? []).filter((p) => !p.services_done).map((p) => p.id)
-    if (notReady.length > 0) await admin.from('participants').delete().in('id', notReady)
+    // Filmer som redan visats i rummet (tidigare omgångar) ska inte komma igen.
+    const { data: shown } = await admin.from('room_movies').select('tmdb_id').eq('room_id', roomId)
+    const shownIds = new Set((shown ?? []).map((r) => r.tmdb_id as number))
+    const round: number = newRound ? (room.round ?? 1) + 1 : (room.round ?? 1)
 
     const region: string = room.region ?? 'SE'
 
     // Hämta kandidater: | betyder ELLER, alltså minst en av gruppens tjänster.
     const pages = await Promise.all(
-      Array.from({ length: PAGES }, (_, i) =>
+      // Senare omgångar hämtar fler sidor eftersom de populäraste filmerna redan har visats.
+      Array.from({ length: Math.min(MAX_PAGES, PAGES + 2 * (round - 1)) }, (_, i) =>
         tmdb<{ results: DiscoverMovie[] }>('/discover/movie', {
           watch_region: region,
           with_watch_providers: [...groupProviders].join('|'),
@@ -90,7 +98,9 @@ Deno.serve(async (req) => {
       ),
     )
     const seen = new Set<number>()
-    const candidates = pages.flatMap((p) => p.results).filter((m) => !seen.has(m.id) && seen.add(m.id))
+    const candidates = pages
+      .flatMap((p) => p.results)
+      .filter((m) => !shownIds.has(m.id) && !seen.has(m.id) && seen.add(m.id))
     if (candidates.length === 0) return json({ error: 'Hittade inga filmer på gruppens tjänster och valda genrer' }, 404)
 
     const [genreData, allProviders] = await Promise.all([
@@ -152,6 +162,7 @@ Deno.serve(async (req) => {
 
     const rows = picked.map(({ movie: m, title, poster, providers }, position) => ({
       room_id: roomId,
+      round,
       position,
       tmdb_id: m.id,
       title,
@@ -165,11 +176,28 @@ Deno.serve(async (req) => {
     const { error: insertError } = await admin.from('room_movies').insert(rows)
     if (insertError) throw insertError
 
+    if (newRound) {
+      // Alla ska rösta igen i den nya omgången.
+      const { error: resetError } = await admin
+        .from('participants')
+        .update({ finished_voting_at: null })
+        .eq('room_id', roomId)
+      if (resetError) throw resetError
+    }
+
     const { error: updateError } = await admin
       .from('rooms')
-      .update({ status: 'voting', started_at: new Date().toISOString(), movie_count: rows.length })
+      .update({
+        status: 'voting',
+        round,
+        picked_tmdb_id: null,
+        started_at: new Date().toISOString(),
+        finished_at: null,
+        // Antal filmer i rummet ändras inte om en omgång råkar få färre filmer.
+        ...(newRound ? {} : { movie_count: rows.length }),
+      })
       .eq('id', roomId)
-      .eq('status', 'lobby')
+      .eq('status', room.status)
     if (updateError) throw updateError
 
     return json({ ok: true, count: rows.length })

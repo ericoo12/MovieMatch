@@ -11,6 +11,8 @@ export type Room = {
   genre_ids: number[]
   /** Film som slumpats fram bland matcherna, syns för alla. */
   picked_tmdb_id: number | null
+  /** Omgång 1, 2, 3 … Varje ny omgång får filmer som inte visats förut. */
+  round: number
   created_at: string
   started_at: string | null
   finished_at: string | null
@@ -40,6 +42,7 @@ export type Genre = {
 
 export type RoomMovie = {
   room_id: string
+  round: number
   position: number
   tmdb_id: number
   title: string

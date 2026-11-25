@@ -13,13 +13,13 @@ export default function Voting({ room, participants, me }: Props) {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    Promise.all([fetchMovies(room.id), fetchVotes(room.id)])
+    Promise.all([fetchMovies(room.id, room.round), fetchVotes(room.id)])
       .then(([m, v]) => {
         setMovies(m)
         setVoted(new Set(v.filter((x) => x.participant_id === me.id).map((x) => x.tmdb_id)))
       })
       .catch((e: Error) => setError(e.message))
-  }, [room.id, me.id])
+  }, [room.id, room.round, me.id])
 
   const remaining = useMemo(() => (movies ?? []).filter((m) => !voted.has(m.tmdb_id)), [movies, voted])
   const current = remaining.at(0)

@@ -4,6 +4,7 @@ import type { Participant, RoomMovie, Vote } from './types'
 
 const movie = (tmdb_id: number, popularity = 10): RoomMovie => ({
   room_id: 'r',
+  round: 1,
   position: tmdb_id,
   tmdb_id,
   title: `Film ${tmdb_id}`,
