@@ -1,12 +1,12 @@
 import { motion, useMotionValue, useTransform, type PanInfo } from 'motion/react'
 import { posterUrl } from '../lib/tmdb'
-import type { RoomMovie } from '../lib/types'
+import type { MovieInfo } from '../lib/types'
 import ProviderBadges from './ProviderBadges'
 
 const SWIPE_DISTANCE = 110
 
 type Props = {
-  movie: RoomMovie
+  movie: MovieInfo
   onVote: (liked: boolean) => void
 }
 
@@ -56,7 +56,9 @@ export default function MovieCard({ movie, onVote }: Props) {
       <div className="absolute inset-x-0 bottom-0 flex flex-col gap-2 bg-gradient-to-t from-black via-black/80 to-transparent p-4 pt-16">
         <h2 className="text-2xl leading-tight font-bold">
           {movie.title}
-          {movie.release_year && <span className="ml-2 text-base font-normal text-slate-300">{movie.release_year}</span>}
+          {movie.release_year && (
+            <span className="ml-2 text-base font-normal text-slate-300">{movie.release_year}</span>
+          )}
         </h2>
         {movie.genres.length > 0 && <p className="text-sm text-slate-300">{movie.genres.join(' · ')}</p>}
         <ProviderBadges providers={movie.providers} />

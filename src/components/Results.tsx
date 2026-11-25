@@ -1,7 +1,9 @@
 import { motion } from 'motion/react'
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { fetchMovies, fetchVotes, pickMovie, startRoom } from '../lib/api'
+import { fetchMovies, fetchVotes, pickMovie, saveGroupMatches, startRoom } from '../lib/api'
+import AdSlot from './AdSlot'
+import SaveButtons from './SaveButtons'
 import { computeResults, type RankedMovie, type Results as ResultData } from '../lib/results'
 import { posterUrl } from '../lib/tmdb'
 import type { Participant, Room } from '../lib/types'
@@ -24,6 +26,7 @@ function MovieRow({ item, voterCount, highlight }: { item: RankedMovie; voterCou
           {item.likes} av {voterCount} gillade
         </p>
         <ProviderBadges providers={item.movie.providers} />
+        <SaveButtons movie={item.movie} />
       </div>
     </li>
   )
@@ -35,12 +38,21 @@ export default function Results({ room, participants, me }: Props) {
   const [error, setError] = useState<string | null>(null)
   const [picking, setPicking] = useState(false)
   const [starting, setStarting] = useState(false)
+  const [savedToGroup, setSavedToGroup] = useState(false)
 
   useEffect(() => {
     Promise.all([fetchMovies(room.id, room.round), fetchVotes(room.id)])
       .then(([movies, votes]) => setResult(computeResults(movies, participants, votes)))
       .catch((e: Error) => setError(e.message))
   }, [room.id, room.round, participants])
+
+  // Rum från en grupp: spara matchningarna i gruppen.
+  useEffect(() => {
+    if (!room.group_id) return
+    saveGroupMatches(room.id)
+      .then(() => setSavedToGroup(true))
+      .catch(() => undefined)
+  }, [room.id, room.group_id, room.round])
 
   if (error && !result) return <ErrorText>{error}</ErrorText>
   if (!result) return <Spinner label="Räknar röster…" />
@@ -135,6 +147,12 @@ export default function Results({ room, participants, me }: Props) {
           <p className="text-slate-400">Ingen film fick ett ja. Testa en ny omgång med nya filmer.</p>
         </div>
       )}
+
+      {savedToGroup && matches.length > 0 && (
+        <p className="text-center text-sm text-emerald-300">Matchningarna är sparade i gruppen.</p>
+      )}
+
+      <AdSlot premiumRoom={room.is_premium} />
 
       {me.is_host ? (
         <Button variant={matches.length > 0 ? 'secondary' : 'primary'} onClick={newRound} disabled={starting}>
