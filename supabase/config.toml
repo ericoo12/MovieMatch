@@ -1,0 +1,9 @@
+# Minimal konfiguration för Supabase CLI. Resten använder standardvärden.
+project_id = "moviematch"
+
+[auth]
+# Varje deltagare får en anonym session utan konto.
+enable_anonymous_sign_ins = true
+
+[functions.providers]
+verify_jwt = false
