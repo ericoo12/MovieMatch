@@ -1,7 +1,9 @@
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import { setMovieCount, startRoom } from '../lib/api'
 import type { Participant, Room } from '../lib/types'
+import GenrePicker from './GenrePicker'
 import ServicePicker from './ServicePicker'
+import Toast from './Toast'
 import { Button, ErrorText } from './ui'
 
 type Props = { room: Room; participants: Participant[]; me: Participant }
@@ -9,18 +11,20 @@ type Props = { room: Room; participants: Participant[]; me: Participant }
 export default function Lobby({ room, participants, me }: Props) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [copied, setCopied] = useState(false)
+  const [toast, setToast] = useState<string | null>(null)
+  const showError = useCallback((message: string) => setError(message), [])
   const link = `${window.location.origin}/r/${room.code}`
   const readyCount = participants.filter((p) => p.services_done).length
 
-  async function share() {
-    if (navigator.share) {
-      await navigator.share({ title: 'MovieMatch', text: 'Välj film med oss!', url: link }).catch(() => undefined)
-    } else {
+  async function copyLink() {
+    try {
       await navigator.clipboard.writeText(link)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
+      setToast('Länken har kopierats')
+    } catch {
+      // Vissa webbläsare tillåter inte urklipp, visa då länken så att den kan kopieras för hand.
+      setToast(link)
     }
+    setTimeout(() => setToast(null), 2500)
   }
 
   async function changeCount(delta: number) {
@@ -44,12 +48,14 @@ export default function Lobby({ room, participants, me }: Props) {
       <section className="rounded-2xl bg-slate-800 p-4 text-center">
         <p className="text-sm text-slate-400">Rumskod</p>
         <p className="font-mono text-4xl font-bold tracking-[0.3em]">{room.code}</p>
-        <Button variant="secondary" className="mt-3 bg-slate-700" onClick={share}>
-          {copied ? 'Länken är kopierad' : 'Bjud in med länk'}
+        <Button variant="muted" className="mt-3" onClick={copyLink}>
+          Bjud in med länk
         </Button>
       </section>
 
       <ServicePicker roomId={room.id} me={me} />
+
+      <GenrePicker room={room} isHost={me.is_host} onError={showError} />
 
       <section>
         <h2 className="mb-2 font-semibold">
@@ -76,11 +82,19 @@ export default function Lobby({ room, participants, me }: Props) {
           <div className="flex items-center justify-between rounded-xl bg-slate-800 p-3">
             <span className="text-sm">Antal filmer att rösta på</span>
             <div className="flex items-center gap-3">
-              <button className="h-9 w-9 rounded-full bg-slate-700 text-lg" onClick={() => changeCount(-1)}>
+              <button
+                className="h-9 w-9 rounded-full bg-slate-700 text-lg hover:bg-slate-600 active:bg-slate-500"
+                onClick={() => changeCount(-1)}
+                aria-label="Färre filmer"
+              >
                 −
               </button>
               <span className="w-6 text-center font-semibold">{room.movie_count}</span>
-              <button className="h-9 w-9 rounded-full bg-slate-700 text-lg" onClick={() => changeCount(1)}>
+              <button
+                className="h-9 w-9 rounded-full bg-slate-700 text-lg hover:bg-slate-600 active:bg-slate-500"
+                onClick={() => changeCount(1)}
+                aria-label="Fler filmer"
+              >
                 +
               </button>
             </div>
@@ -100,6 +114,9 @@ export default function Lobby({ room, participants, me }: Props) {
           Rumsledaren väljer antal filmer ({room.movie_count}) och startar när alla är klara.
         </p>
       )}
+      {!me.is_host && <ErrorText>{error}</ErrorText>}
+
+      <Toast message={toast} />
     </div>
   )
 }

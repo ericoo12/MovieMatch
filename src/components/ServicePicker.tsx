@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { fetchMyServices, fetchProviders, setServices } from '../lib/api'
+import { fetchLists, fetchMyServices, setServices } from '../lib/api'
 import { logoUrl } from '../lib/tmdb'
 import type { Participant, Provider } from '../lib/types'
 import { Button, ErrorText } from './ui'
@@ -12,7 +12,8 @@ export default function ServicePicker({ roomId, me }: { roomId: string; me: Part
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    fetchProviders().then(setProviders).catch((e: Error) => setError(e.message))
+    fetchLists()
+      .then((l) => setProviders(l.providers)).catch((e: Error) => setError(e.message))
     fetchMyServices(me.id)
       .then((ids) => setSelected(new Set(ids)))
       .catch(() => undefined)
@@ -44,7 +45,7 @@ export default function ServicePicker({ roomId, me }: { roomId: string; me: Part
     return (
       <div className="flex items-center justify-between rounded-xl bg-slate-800 p-3 text-sm">
         <span>Du har valt {selected.size} tjänster</span>
-        <button className="text-rose-300" onClick={() => setEditing(true)}>
+        <button className="text-rose-300 hover:text-rose-200" onClick={() => setEditing(true)}>
           Ändra
         </button>
       </div>
@@ -65,7 +66,7 @@ export default function ServicePicker({ roomId, me }: { roomId: string; me: Part
               onClick={() => toggle(p.id)}
               aria-pressed={on}
               className={`flex flex-col items-center gap-1 rounded-xl border p-2 text-xs transition ${
-                on ? 'border-rose-400 bg-rose-500/15' : 'border-slate-700 bg-slate-800'
+                on ? 'border-rose-400 bg-rose-500/15 hover:bg-rose-500/25' : 'border-slate-700 bg-slate-800 hover:bg-slate-700'
               }`}
             >
               {logo && <img src={logo} alt="" className="h-10 w-10 rounded-lg" />}

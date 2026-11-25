@@ -1,19 +1,34 @@
-import { Link, Route, Routes } from 'react-router-dom'
+import { Link, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { isConfigured } from './lib/supabase'
 import About from './pages/About'
 import Home from './pages/Home'
 import RoomPage from './pages/RoomPage'
 
 export default function App() {
+  const location = useLocation()
+  const navigate = useNavigate()
+  const aboutOpen = location.pathname === '/om'
+
+  // Ett nytt klick på "Om" stänger sidan och tar dig tillbaka dit du var.
+  function toggleAbout() {
+    if (!aboutOpen) navigate('/om')
+    else if (location.key !== 'default') navigate(-1)
+    else navigate('/')
+  }
+
   return (
     <div className="mx-auto flex min-h-dvh max-w-md flex-col px-4 pt-4 pb-6">
       <header className="mb-4 flex items-center justify-between">
         <Link to="/" className="text-xl font-bold tracking-tight">
           Movie<span className="text-rose-400">Match</span>
         </Link>
-        <Link to="/om" className="text-sm text-slate-400">
-          Om
-        </Link>
+        <button
+          onClick={toggleAbout}
+          aria-expanded={aboutOpen}
+          className="rounded-lg px-2 py-1 text-sm text-slate-400 hover:bg-slate-800 hover:text-slate-200 active:bg-slate-700"
+        >
+          {aboutOpen ? 'Stäng' : 'Om'}
+        </button>
       </header>
 
       {!isConfigured && (
