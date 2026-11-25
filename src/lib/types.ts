@@ -7,6 +7,10 @@ export type Room = {
   status: RoomStatus
   movie_count: number
   region: string
+  /** TMDB-genre-id:n som rumsledaren valt. Tom lista = alla genrer. */
+  genre_ids: number[]
+  /** Film som slumpats fram bland matcherna, syns för alla. */
+  picked_tmdb_id: number | null
   created_at: string
   started_at: string | null
   finished_at: string | null
@@ -27,6 +31,11 @@ export type Provider = {
   id: number
   name: string
   logo_path: string | null
+}
+
+export type Genre = {
+  id: number
+  name: string
 }
 
 export type RoomMovie = {

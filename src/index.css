@@ -6,6 +6,15 @@ body,
   min-height: 100dvh;
 }
 
+button:not(:disabled),
+a[href] {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
 body {
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   overscroll-behavior: none;
