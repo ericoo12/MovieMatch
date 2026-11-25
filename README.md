@@ -32,9 +32,23 @@ Krav: Node 22, ett [Supabase](https://supabase.com)-konto och en [TMDB](https://
    npx supabase secrets set TMDB_API_KEY=<din TMDB API Read Access Token>
    npx supabase functions deploy providers --no-verify-jwt
    npx supabase functions deploy start-room
+   npx supabase functions deploy solo-movies
    ```
 4. Kopiera `.env.example` till `.env.local` och fyll i URL och anon key från **Project Settings → API**.
 5. Starta: `npm run dev`. Testa på mobilen med `npm run dev -- --host` på samma wifi.
+
+## Free och Premium
+
+Prissidan finns på `/premium`. Uppgraderingen är ett **testläge** utan betalning (`set_plan` i databasen), och kan stängas av igen under Profil. Annonser i Free är platshållare (`AdSlot`).
+
+| Premium | Var |
+| --- | --- |
+| Permanenta grupper, sparade matchningar, sedda filmer, gemensam watchlist | `/grupper` |
+| Solo Swipe | `/solo` |
+| Favoriter, watchlist, personlig historik, sparade tjänster | `/profil` |
+| Reklamfritt, även för vänner i ditt rum | Rum skapade av Premium (`rooms.is_premium`) |
+
+Konto med e-post och lösenord skapas under Profil. Slå av **Confirm email** under Authentication → Sign In / Providers → Email i Supabase, annars krävs en bekräftelselänk via e-post.
 
 ## Kommandon
 

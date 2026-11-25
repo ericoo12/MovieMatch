@@ -27,9 +27,7 @@ const TOP_LIMIT = 5
 export function computeResults(movies: RoomMovie[], participants: Participant[], votes: Vote[]): Results {
   const finished = participants.filter((p) => p.finished_voting_at !== null)
   const voters =
-    finished.length > 0
-      ? finished
-      : participants.filter((p) => votes.some((v) => v.participant_id === p.id))
+    finished.length > 0 ? finished : participants.filter((p) => votes.some((v) => v.participant_id === p.id))
   const voterIds = new Set(voters.map((p) => p.id))
 
   const ranked: RankedMovie[] = movies.map((movie) => ({

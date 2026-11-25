@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
-import { fetchMyServices, reopenServices, setMovieCount, setServices, startRoom } from '../lib/api'
+import { fetchMyServices, reopenServices, saveMyProviders, setMovieCount, setServices, startRoom } from '../lib/api'
+import { useProfile } from '../lib/profile'
+import AdSlot from './AdSlot'
 import type { Participant, Room } from '../lib/types'
 import GenrePicker from './GenrePicker'
 import ServicePicker from './ServicePicker'
@@ -9,6 +11,7 @@ import { Button, ErrorText } from './ui'
 type Props = { room: Room; participants: Participant[]; me: Participant }
 
 export default function Lobby({ room, participants, me }: Props) {
+  const { profile, isPremium } = useProfile()
   const [selected, setSelected] = useState<Set<number>>(new Set())
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -21,11 +24,22 @@ export default function Lobby({ room, participants, me }: Props) {
   const waitingFor = others.filter((p) => !p.services_done).length
   const locked = !me.is_host && me.services_done
 
+  // Tidigare val i rummet, annars Premiums sparade tjänster.
+  const savedProviders = profile?.saved_provider_ids
   useEffect(() => {
     fetchMyServices(me.id)
-      .then((ids) => setSelected(new Set(ids)))
+      .then((ids) => {
+        if (ids.length > 0) setSelected(new Set(ids))
+        else if (savedProviders?.length) setSelected(new Set(savedProviders))
+      })
       .catch(() => undefined)
-  }, [me.id])
+  }, [me.id, savedProviders])
+
+  // Premium: valen sparas till nästa rum.
+  async function saveServices() {
+    await setServices(room.id, [...selected])
+    if (isPremium) await saveMyProviders([...selected]).catch(() => undefined)
+  }
 
   function toggle(id: number) {
     setSelected((prev) => {
@@ -64,10 +78,10 @@ export default function Lobby({ room, participants, me }: Props) {
     }
   }
 
-  const markDone = () => run(() => setServices(room.id, [...selected]))
+  const markDone = () => run(saveServices)
   const start = () =>
     run(async () => {
-      await setServices(room.id, [...selected])
+      await saveServices()
       await startRoom(room.id)
     })
 
@@ -76,6 +90,9 @@ export default function Lobby({ room, participants, me }: Props) {
       <section className="rounded-2xl bg-slate-800 p-4 text-center">
         <p className="text-sm text-slate-400">Rumskod</p>
         <p className="font-mono text-4xl font-bold tracking-[0.3em]">{room.code}</p>
+        {room.is_premium && (
+          <p className="mt-1 text-xs font-semibold text-amber-300">Premiumrum · reklamfritt för alla</p>
+        )}
         <Button variant="muted" className="mt-3" onClick={copyLink}>
           Bjud in med länk
         </Button>
@@ -161,6 +178,8 @@ export default function Lobby({ room, participants, me }: Props) {
           </Button>
         )}
       </section>
+
+      <AdSlot premiumRoom={room.is_premium} />
 
       <Toast message={toast} />
     </div>

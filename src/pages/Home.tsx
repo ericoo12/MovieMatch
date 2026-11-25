@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
+import AdSlot from '../components/AdSlot'
 import { Button, ErrorText } from '../components/ui'
 import { createRoom } from '../lib/api'
 
@@ -60,6 +61,8 @@ export default function Home() {
       </form>
 
       <ErrorText>{error}</ErrorText>
+
+      <AdSlot size="card" />
     </div>
   )
 }

@@ -48,15 +48,24 @@ describe('computeResults', () => {
     const movies = [movie(1), movie(2), movie(3)]
     const people = [person('a'), person('b'), person('c')]
     const votes = [
-      vote('a', 1, true), vote('b', 1, true), vote('c', 1, false),
-      vote('a', 2, true), vote('b', 2, false), vote('c', 2, false),
-      vote('a', 3, false), vote('b', 3, false), vote('c', 3, false),
+      vote('a', 1, true),
+      vote('b', 1, true),
+      vote('c', 1, false),
+      vote('a', 2, true),
+      vote('b', 2, false),
+      vote('c', 2, false),
+      vote('a', 3, false),
+      vote('b', 3, false),
+      vote('c', 3, false),
     ]
 
     const r = computeResults(movies, people, votes)
 
     expect(r.matches).toEqual([])
-    expect(r.top.map((m) => [m.movie.tmdb_id, m.likes])).toEqual([[1, 2], [2, 1]])
+    expect(r.top.map((m) => [m.movie.tmdb_id, m.likes])).toEqual([
+      [1, 2],
+      [2, 1],
+    ])
   })
 
   it('sorterar lika antal ja efter popularitet', () => {
@@ -72,7 +81,13 @@ describe('computeResults', () => {
   it('räknar bara de som röstat klart om rummet avslutas i förtid', () => {
     const movies = [movie(1), movie(2)]
     const people = [person('a'), person('b'), person('c', false)]
-    const votes = [vote('a', 1, true), vote('b', 1, true), vote('c', 1, false), vote('a', 2, false), vote('b', 2, false)]
+    const votes = [
+      vote('a', 1, true),
+      vote('b', 1, true),
+      vote('c', 1, false),
+      vote('a', 2, false),
+      vote('b', 2, false),
+    ]
 
     const r = computeResults(movies, people, votes)
 
