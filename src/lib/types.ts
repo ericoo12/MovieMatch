@@ -50,6 +50,7 @@ export type RoomMovie = {
   position: number
   tmdb_id: number
   title: string
+  overview: string | null
   poster_path: string | null
   genres: string[]
   providers: Provider[]
@@ -68,6 +69,8 @@ export type Vote = {
 export type MovieInfo = {
   tmdb_id: number
   title: string
+  /** Kort handling. Saknas i äldre sparade filmer. */
+  overview?: string | null
   poster_path: string | null
   genres: string[]
   providers: Provider[]

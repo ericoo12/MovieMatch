@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isLatinText, movieWeight, readableTitle, weightedSample } from './selection'
+import { isLatinText, movieWeight, readableOverview, readableTitle, weightedSample } from './selection'
 
 describe('readableTitle', () => {
   it('behåller en svensk titel', () => {
@@ -43,5 +43,20 @@ describe('weightedSample', () => {
     const picked = weightedSample([1, 2, 3], 5, () => 1)
     expect(picked).toHaveLength(3)
     expect(new Set(picked).size).toBe(3)
+  })
+})
+
+describe('readableOverview', () => {
+  it('använder svensk handling när den finns', () => {
+    expect(readableOverview({ overview: 'En svensk text.' })).toBe('En svensk text.')
+  })
+
+  it('faller tillbaka på engelska när svensk saknas', () => {
+    const m = { overview: '', translations: [{ iso_639_1: 'en', data: { overview: 'An English text.' } }] }
+    expect(readableOverview(m)).toBe('An English text.')
+  })
+
+  it('ger null när ingen handling finns', () => {
+    expect(readableOverview({ overview: null })).toBeNull()
   })
 })

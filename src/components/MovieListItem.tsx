@@ -17,6 +17,7 @@ export default function MovieListItem({ movie, children }: { movie: MovieInfo; c
           )}
         </h3>
         {movie.genres.length > 0 && <p className="text-xs text-slate-400">{movie.genres.join(' · ')}</p>}
+        {movie.overview && <p className="line-clamp-2 text-xs text-slate-300">{movie.overview}</p>}
         <ProviderBadges providers={movie.providers} />
         {children}
       </div>

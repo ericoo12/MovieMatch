@@ -10,7 +10,7 @@ type TitleSources = {
   title: string
   original_title: string
   /** Översättningar från TMDB:s translations-svar, t.ex. { iso_639_1: 'en', data: { title: '…' } }. */
-  translations?: { iso_639_1: string; data: { title?: string } }[]
+  translations?: { iso_639_1: string; data: { title?: string; overview?: string } }[]
 }
 
 /**
@@ -50,4 +50,14 @@ export function shuffle<T>(items: T[], random = Math.random): T[] {
     ;[a[i], a[j]] = [a[j], a[i]]
   }
   return a
+}
+
+/** Handlingen på svenska, annars engelska. null om ingen finns. */
+export function readableOverview(m: {
+  overview?: string | null
+  translations?: { iso_639_1: string; data: { overview?: string } }[]
+}): string | null {
+  const en = m.translations?.find((t) => t.iso_639_1 === 'en')?.data.overview
+  const options = [m.overview, en].map((t) => t?.trim()).filter((t): t is string => Boolean(t))
+  return options[0] ?? null
 }

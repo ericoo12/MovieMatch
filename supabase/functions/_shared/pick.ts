@@ -1,6 +1,6 @@
 // Hittar filmer som finns på minst en av de givna tjänsterna. Används av både
 // start-room (gruppens filmer) och solo-movies (Solo Swipe).
-import { movieWeight, readableTitle, shuffle, weightedSample } from './selection.ts'
+import { movieWeight, readableOverview, readableTitle, shuffle, weightedSample } from './selection.ts'
 import { swedishProviders, tmdb } from './tmdb.ts'
 
 type DiscoverMovie = {
@@ -19,18 +19,20 @@ type MovieDetails = {
   id: number
   title: string
   original_title: string
+  overview: string | null
   poster_path: string | null
   belongs_to_collection: { id: number } | null
   'watch/providers'?: {
     results: Record<string, { flatrate?: ProviderEntry[]; free?: ProviderEntry[]; ads?: ProviderEntry[] }>
   }
-  translations?: { translations: { iso_639_1: string; data: { title?: string } }[] }
+  translations?: { translations: { iso_639_1: string; data: { title?: string; overview?: string } }[] }
   images?: { posters: { file_path: string }[] }
 }
 
 export type FoundMovie = {
   tmdb_id: number
   title: string
+  overview: string | null
   poster_path: string
   genres: string[]
   providers: { id: number; name: string; logo_path: string | null }[]
@@ -103,6 +105,7 @@ export async function findMovies(o: Options): Promise<FoundMovie[]> {
       found: {
         tmdb_id: movie.id,
         title: readableTitle({ ...d, translations: d.translations?.translations }),
+        overview: readableOverview({ ...d, translations: d.translations?.translations }),
         poster_path: poster,
         genres: movie.genre_ids.map((id) => genreName.get(id)).filter((g): g is string => Boolean(g)),
         providers: ids.map((id) => {

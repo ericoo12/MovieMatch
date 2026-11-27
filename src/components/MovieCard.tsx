@@ -1,4 +1,5 @@
 import { motion, useMotionValue, useTransform, type PanInfo } from 'motion/react'
+import { useState } from 'react'
 import { posterUrl } from '../lib/tmdb'
 import type { MovieInfo } from '../lib/types'
 import ProviderBadges from './ProviderBadges'
@@ -16,6 +17,7 @@ export default function MovieCard({ movie, onVote }: Props) {
   const yesOpacity = useTransform(x, [20, SWIPE_DISTANCE], [0, 1])
   const noOpacity = useTransform(x, [-SWIPE_DISTANCE, -20], [1, 0])
   const poster = posterUrl(movie.poster_path)
+  const [expanded, setExpanded] = useState(false)
 
   function onDragEnd(_: unknown, info: PanInfo) {
     if (info.offset.x > SWIPE_DISTANCE || info.velocity.x > 600) onVote(true)
@@ -61,6 +63,22 @@ export default function MovieCard({ movie, onVote }: Props) {
           )}
         </h2>
         {movie.genres.length > 0 && <p className="text-sm text-slate-300">{movie.genres.join(' · ')}</p>}
+        {movie.overview && (
+          // Texten går att läsa och scrolla utan att kortet swipas iväg.
+          <div
+            onPointerDown={(e) => e.stopPropagation()}
+            style={{ touchAction: 'pan-y' }}
+            className={expanded ? 'max-h-[40dvh] overflow-y-auto' : ''}
+          >
+            <p className={`text-sm leading-snug text-slate-200 ${expanded ? '' : 'line-clamp-3'}`}>{movie.overview}</p>
+            <button
+              onClick={() => setExpanded((v) => !v)}
+              className="mt-1 text-xs font-semibold text-rose-300 hover:text-rose-200"
+            >
+              {expanded ? 'Visa mindre' : 'Läs mer'}
+            </button>
+          </div>
+        )}
         <ProviderBadges providers={movie.providers} />
       </div>
     </motion.div>
