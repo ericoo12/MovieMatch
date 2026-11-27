@@ -22,6 +22,7 @@ function MovieRow({ item, voterCount, highlight }: { item: RankedMovie; voterCou
       <div className="flex flex-col gap-1.5">
         <h3 className="leading-tight font-semibold">{item.movie.title}</h3>
         {item.movie.genres.length > 0 && <p className="text-xs text-slate-400">{item.movie.genres.join(' · ')}</p>}
+        {item.movie.overview && <p className="line-clamp-3 text-xs text-slate-300">{item.movie.overview}</p>}
         <p className="text-sm font-medium text-emerald-400">
           {item.likes} av {voterCount} gillade
         </p>

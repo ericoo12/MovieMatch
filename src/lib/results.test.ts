@@ -8,6 +8,7 @@ const movie = (tmdb_id: number, popularity = 10): RoomMovie => ({
   position: tmdb_id,
   tmdb_id,
   title: `Film ${tmdb_id}`,
+  overview: null,
   poster_path: null,
   genres: [],
   providers: [],

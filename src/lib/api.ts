@@ -117,6 +117,7 @@ export const saveMyProviders = (providers: number[]) => rpc<void>('save_my_provi
 function snapshot(m: MovieInfo): Omit<MovieInfo, 'tmdb_id'> {
   return {
     title: m.title,
+    overview: m.overview ?? null,
     poster_path: m.poster_path,
     genres: m.genres,
     providers: m.providers,
